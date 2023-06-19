@@ -1,0 +1,214 @@
+#include <IRremote.h>
+#include <LiquidCrystal.h>
+#include <Servo.h>
+#define LEDROJO 4
+#define LEDVERDE 5
+#define SENSORTMP A0
+#define SENSORIR 11
+#define CODEOFF 0
+#define CODEBACK 4
+#define CODENEXT 6
+enum EnumEstaciones{Verano,Otonio,Invierno,Primavera};
+
+class Estacion{
+  private:
+  int estado;
+  int tempMax;
+  String nombreEstado;
+
+  String setPropPorEstado(int estado){
+    String nombreReturn;
+    switch(estado){
+      case Verano:
+        nombreReturn = "Verano";
+        tempMax = 60;
+      break;
+
+      case Otonio:
+        nombreReturn = "Otoño";
+        tempMax = 40;
+      break;
+
+      case Invierno:
+        nombreReturn = "Invierno";
+        tempMax = 32;
+      break;
+
+      case Primavera:
+        nombreReturn = "Primavera";
+        tempMax = 40;
+      break;
+    }
+    return nombreReturn;
+  }
+
+  public:
+  Estacion(){
+    setEstacion(Verano);
+  }
+  void setEstacion(int _estado){
+    estado = _estado;
+    nombreEstado = setPropPorEstado(estado);
+  }
+
+  void setTempMax(int _tempMax){
+    tempMax = _tempMax;
+  }
+
+  int getEstado(){
+    return estado;
+  }
+
+  String getNombreEstado(){
+    return nombreEstado;
+  }
+
+  int getTempMax(){
+    return tempMax;
+  }
+
+  int movEstacion(bool sig){
+    int sigEstacion;
+    sigEstacion = estado;
+
+    if(sig){
+      if(estado == Primavera){
+        sigEstacion = Verano;
+      }
+      else{
+        sigEstacion++;
+      }
+    }
+
+    else{
+      if(estado == Verano){
+        sigEstacion = Primavera;
+      }
+      else{
+        sigEstacion--;
+      }
+    }
+    setEstacion(sigEstacion);
+    return sigEstacion;
+  }
+};
+
+Estacion estacionDelAnio;
+IRrecv sensorIr;
+Servo servoIncendio;
+LiquidCrystal lcd(2,A1,A2,A3,A4,A5);
+bool funcSisIncedios;
+int temperatura;
+String msjTemp;
+String msjEstacion;
+
+void imprimirMsjEnLcd(LiquidCrystal lcd, String msjArriba, String msjAbajo, bool limpiar);
+int recibirTemp(int pinSensorTmp);
+int recibirControlRemotoIR(IRrecv irrecv);
+void switchBooleano(bool *valor);
+
+void setup()
+{
+  pinMode(LEDROJO,OUTPUT);
+  pinMode(LEDVERDE,OUTPUT);
+  pinMode(SENSORIR,INPUT);
+  Serial.begin(9600);
+  
+  lcd.begin(16,2);
+  servoIncendio.attach(3);
+  sensorIr.begin(SENSORIR,ENABLE_LED_FEEDBACK);
+  funcSisIncedios = false;
+  estacionDelAnio.setEstacion(Verano);
+}
+
+void loop()
+{
+  int botonControlRemoto;
+  bool limpiarLcd;
+  botonControlRemoto = recibirControlRemotoIR(sensorIr);
+  limpiarLcd = false;
+
+  switch(botonControlRemoto){
+    case CODEOFF:
+      switchBooleano(&funcSisIncedios);
+    break;
+
+    case CODENEXT:
+      estacionDelAnio.movEstacion(true);
+      limpiarLcd = true;
+    break;
+
+    case CODEBACK:
+      estacionDelAnio.movEstacion(false);
+      limpiarLcd = true;
+    break;
+  }
+    if(funcSisIncedios){
+      lcd.display();
+      digitalWrite(LEDVERDE,HIGH);
+
+      if(temperatura != recibirTemp(SENSORTMP)){
+        temperatura = recibirTemp(SENSORTMP);
+        limpiarLcd = true;
+      }
+      msjTemp = "Temp: " + (String)temperatura + " C";
+      msjEstacion = estacionDelAnio.getNombreEstado();
+
+      if(temperatura > estacionDelAnio.getTempMax()){
+        msjEstacion = "ALERTA INCENDIO!";
+        digitalWrite(LEDVERDE,LOW);
+
+        servoIncendio.write(0);
+        digitalWrite(LEDROJO,HIGH);
+        delay(100);
+        digitalWrite(LEDROJO,LOW);
+        servoIncendio.write(100);
+      }
+
+      imprimirMsjEnLcd(lcd,msjTemp,msjEstacion,limpiarLcd);
+    }
+    else{
+      lcd.noDisplay();
+      digitalWrite(LEDVERDE,LOW);
+    }
+  delay(100);
+}
+
+void imprimirMsjEnLcd(LiquidCrystal lcd, String msjArriba, String msjAbajo, bool limpiar){
+  if(limpiar){
+    lcd.clear();
+  }
+  lcd.setCursor(0,0);
+  lcd.print(msjTemp);
+  lcd.setCursor(0,1);
+  lcd.print(msjEstacion);
+}
+
+int recibirTemp(int pinSensorTmp){
+  int grados;
+  int lectura;
+  
+  lectura = analogRead(pinSensorTmp);
+  grados = map(lectura,20,358,-40,125);
+  
+  return grados;
+}
+
+int recibirControlRemotoIR(IRrecv irrecv){
+  int valor;
+  valor = -1;
+  if(irrecv.decode() && irrecv.decodedIRData.protocol != UNKNOWN){
+    valor = irrecv.decodedIRData.command;
+  }
+  irrecv.resume();
+  return valor;
+}
+
+void switchBooleano(bool *valor){
+  if(*valor == false){
+      *valor = true;
+    }
+  else{
+    *valor = false;
+  }
+}
