@@ -6,3 +6,9 @@ El proyecto consiste en un sistema de incendio utilizando Arduino que tiene como
 
 ## Diagrama esquematico
 ![Diagrama esquematico](Recursos/DiagramaEsquematico.jpg)
+
+## Componentes
+- Arduino uno: Maneja toda la logica del sistema.
+- Sensor de temperatura: Recibe la temperatura ambiente constantemente.
+- Control remoto IR: Maneja el funcionamiento del algoritmo de arduino. Tiene 3 botones funcionales:
+Apagar, siguiente estación y anterior estación.
